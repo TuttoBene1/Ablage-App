@@ -1,0 +1,75 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build universal app
+    runs-on: macos-latest
+    env:
+      # Optional: a stable signing certificate keeps users' screen-recording
+      # permission across updates. Without it the app is signed ad-hoc.
+      HAS_SIGNING_CERT: ${{ secrets.SIGNING_P12_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          swift --version
+
+      - name: Import signing certificate
+        if: env.HAS_SIGNING_CERT == 'true'
+        env:
+          P12_BASE64: ${{ secrets.SIGNING_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.SIGNING_P12_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          PASS="$(openssl rand -hex 16)"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/identity.p12"
+          security create-keychain -p "$PASS" "$KEYCHAIN"
+          security set-keychain-settings "$KEYCHAIN"
+          security unlock-keychain -p "$PASS" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/identity.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PASS" "$KEYCHAIN" > /dev/null
+          rm -f "$RUNNER_TEMP/identity.p12"
+          echo "SIGNING_IDENTITY=Ablage Local Signing" >> "$GITHUB_ENV"
+          echo "SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+      - name: Build app, DMG and ZIP
+        run: ./build.sh --release
+
+      - name: Self-test
+        continue-on-error: true
+        timeout-minutes: 3
+        run: |
+          BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/Ablage"
+          "$BIN" --selftest | tee selftest.log
+          ! grep -q "^FAIL" selftest.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ablage-${{ github.sha }}
+          path: dist/*
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          FILES=(dist/Ablage.dmg dist/Ablage-macOS.zip dist/SHA256SUMS.txt)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" "${FILES[@]}" --repo "$GITHUB_REPOSITORY" \
+              --title "Ablage ${TAG#v}" --notes-file .github/release-notes.md
+          fi
