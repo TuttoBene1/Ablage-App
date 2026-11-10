@@ -6,9 +6,6 @@ final class PreviewModel: ObservableObject {
     @Published var hovering = false
 }
 
-/// Small thumbnail that slides in at the bottom right after a screenshot,
-/// stays a few seconds (longer while hovered) and slides out again.
-/// Clicking it opens the editor.
 @MainActor
 final class ScreenshotPreview {
     static let shared = ScreenshotPreview()
@@ -30,7 +27,6 @@ final class ScreenshotPreview {
         let margin = Self.shadowMargin
         let cardOrigin = CGPoint(x: visible.maxX - Self.edgeInset - card.width,
                                  y: visible.minY + Self.edgeInset)
-        // The window reaches the right screen edge, so the card slides in from there.
         let frame = NSRect(x: cardOrigin.x - margin,
                            y: cardOrigin.y - margin,
                            width: visible.maxX - (cardOrigin.x - margin),
@@ -129,7 +125,7 @@ struct PreviewCard: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(Color.black.opacity(0.38))
-                    Label("Bearbeiten", systemImage: "paintbrush.pointed.fill")
+                    Label("Edit", systemImage: "paintbrush.pointed.fill")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                 }
@@ -149,6 +145,6 @@ struct PreviewCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .onHover(perform: onHover)
             .onTapGesture(perform: onOpen)
-            .help("Klicken zum Bearbeiten")
+            .help("Click to edit")
     }
 }

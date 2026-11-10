@@ -2,7 +2,6 @@ import AppKit
 import AVFoundation
 import ScreenCaptureKit
 
-/// Records a region of one display straight into a .mov file in ~/Movies.
 @MainActor
 final class ScreenRecorder {
     private(set) var isRecording = false
@@ -49,7 +48,6 @@ final class ScreenRecorder {
         startDate = Date()
     }
 
-    /// Stops the recording and returns the finished file, or nil if it failed.
     func stop() async -> URL? {
         guard isRecording, let stream else { return nil }
         isRecording = false
@@ -75,9 +73,9 @@ final class ScreenRecorder {
         let folder = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask)[0]
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "de_DE")
-        formatter.dateFormat = "yyyy-MM-dd 'um' HH.mm.ss"
-        let base = "Bildschirmaufnahme \(formatter.string(from: Date()))"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
+        let base = "Screen Recording \(formatter.string(from: Date()))"
         var url = folder.appendingPathComponent(base + ".mov")
         var counter = 2
         while FileManager.default.fileExists(atPath: url.path) {
@@ -88,7 +86,6 @@ final class ScreenRecorder {
     }
 }
 
-/// Receives (and drops) the raw frames; the recording output writes the file.
 private final class FrameSink: NSObject, SCStreamOutput {
     let queue = DispatchQueue(label: "ablage.recorder.frames", qos: .userInitiated)
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {}

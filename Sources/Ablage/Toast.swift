@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Small, self-dismissing confirmation bubble near the bottom of the screen.
 @MainActor
 final class Toast {
     static let shared = Toast()

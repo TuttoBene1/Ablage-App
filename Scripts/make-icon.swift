@@ -1,4 +1,3 @@
-// Renders the app icon (squircle + SF Symbol) into an .iconset folder.
 // Usage: swift Scripts/make-icon.swift <output.iconset>
 import AppKit
 
@@ -14,7 +13,6 @@ func render(pixels: Int) -> Data {
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
     let s = CGFloat(pixels)
 
-    // macOS icon grid: 824/1024 body with soft shadow.
     let inset = s * 100 / 1024
     let body = NSRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
     let radius = body.width * 0.2237
@@ -36,7 +34,6 @@ func render(pixels: Int) -> Data {
     ])!
     gradient.draw(in: path, angle: -90)
 
-    // Subtle inner highlight.
     NSGraphicsContext.saveGraphicsState()
     path.addClip()
     let highlight = NSBezierPath(roundedRect: body.insetBy(dx: s * 0.003, dy: s * 0.003),

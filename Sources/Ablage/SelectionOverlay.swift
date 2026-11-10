@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Full-screen, dimmed, non-activating overlay used to pick the capture area.
 final class SelectionWindow: NSPanel {
     let targetScreen: NSScreen
     private let selectionView: SelectionView
@@ -90,8 +89,6 @@ final class SelectionView: NSView {
         toolbar = host
     }
 
-    // MARK: Drawing
-
     private func updateLayers() {
         shapes.update(selection: selection)
     }
@@ -120,8 +117,6 @@ final class SelectionView: NSView {
         }
     }
 
-    // MARK: Cursor
-
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach(removeTrackingArea)
@@ -146,8 +141,6 @@ final class SelectionView: NSView {
             NSCursor.crosshair.set()
         }
     }
-
-    // MARK: Mouse & keyboard
 
     override func mouseDown(with event: NSEvent) {
         window?.makeKey()
@@ -181,7 +174,6 @@ final class SelectionView: NSView {
             updateLayers()
             return
         }
-        // Convert to the screen's top-left based coordinate space used by ScreenCaptureKit.
         let topLeft = CGRect(x: rect.minX, y: bounds.height - rect.maxY, width: rect.width, height: rect.height)
         controller?.complete(rect: topLeft, on: screen)
     }
@@ -192,11 +184,11 @@ final class SelectionView: NSView {
 
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
-        case 53: controller?.cancel()                                   // esc
-        case 9 where startPoint == nil: controller?.mode = .video       // V
-        case 35 where startPoint == nil, 3 where startPoint == nil:     // P / F
+        case KeyCode.escape: controller?.cancel()
+        case KeyCode.v where startPoint == nil: controller?.mode = .video
+        case KeyCode.p where startPoint == nil, KeyCode.f where startPoint == nil:
             controller?.mode = .photo
-        default: break // swallow, no beep
+        default: break
         }
     }
 
@@ -209,8 +201,6 @@ final class SelectionView: NSView {
     }
 }
 
-/// Dimming with a clear cut-out for the selection, plus a thin white outline.
-/// Lives in its own layer-backed view so it always stays below the badge and toolbar.
 final class SelectionShapeView: NSView {
     private let dimLayer = CAShapeLayer()
     private let borderLayer = CAShapeLayer()
@@ -265,7 +255,6 @@ final class SelectionShapeView: NSView {
     }
 }
 
-/// Small pill that shows the selection size next to the cursor.
 final class SizeBadge: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -291,24 +280,22 @@ final class SizeBadge: NSView {
     }
 }
 
-// MARK: - Toolbar
-
 struct CaptureToolbar: View {
     static let margin: CGFloat = 24
     @ObservedObject var controller: CaptureController
 
     var body: some View {
         HStack(spacing: 2) {
-            ModeButton(title: "Foto", symbol: "camera", selectedSymbol: "camera.fill",
+            ModeButton(title: "Photo", symbol: "camera", selectedSymbol: "camera.fill",
                        tint: .white, selected: controller.mode == .photo) {
                 controller.mode = .photo
             }
-            .help("Bildschirmfoto (F)")
+            .help("Photo (P)")
             ModeButton(title: "Video", symbol: "record.circle", selectedSymbol: "record.circle.fill",
                        tint: Color(red: 1, green: 0.27, blue: 0.23), selected: controller.mode == .video) {
                 controller.mode = .video
             }
-            .help("Bildschirmaufnahme (V)")
+            .help("Video (V)")
 
             Rectangle()
                 .fill(Color.white.opacity(0.16))
@@ -316,7 +303,7 @@ struct CaptureToolbar: View {
                 .padding(.horizontal, 6)
 
             CloseButton { controller.cancel() }
-                .help("Abbrechen (esc)")
+                .help("Cancel (esc)")
         }
         .padding(5)
         .background(

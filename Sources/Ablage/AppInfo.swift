@@ -2,14 +2,20 @@ import AppKit
 
 @MainActor
 enum AppInfo {
-    static let website = URL(string: "https://webforging.de")!
+    static let website = URL(string: "https://webforging.de/app-entwicklung")!
     static let repository = URL(string: "https://github.com/TuttoBene1/Ablage-App")!
+
+    static let webforgingLogo: NSImage? = {
+        let image = Bundle.main.image(forResource: "WebforgingLogo")
+            ?? NSImage(contentsOfFile: "Resources/WebforgingLogo.png")
+        image?.isTemplate = true
+        return image
+    }()
 
     static var version: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
     }
 
-    /// Standard macOS “About” window with credits linking to Webforging and the repository.
     static func showAbout() {
         let center = NSMutableParagraphStyle()
         center.alignment = .center
@@ -18,7 +24,7 @@ enum AppInfo {
             .foregroundColor: NSColor.secondaryLabelColor,
             .paragraphStyle: center,
         ]
-        let credits = NSMutableAttributedString(string: "Bildschirmfoto, Bildschirmaufnahme & Zwischenablage.\nEntwickelt von ", attributes: base)
+        let credits = NSMutableAttributedString(string: "Screenshots, screen recordings & clipboard history.\nMade by ", attributes: base)
         var link = base
         link[.link] = website
         credits.append(NSAttributedString(string: "Webforging", attributes: link))

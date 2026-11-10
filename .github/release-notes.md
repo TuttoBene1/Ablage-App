@@ -1,18 +1,13 @@
-**Ablage** – Bildschirmfoto, Bildschirmaufnahme und Zwischenablage-Verlauf für die macOS-Menüleiste.
+**Ablage** – screenshots, screen recordings and clipboard history in the macOS menu bar.
 
-### Installation
+### Install
 
-- **[Ablage.dmg](https://github.com/TuttoBene1/Ablage-App/releases/latest/download/Ablage.dmg)** öffnen und Ablage in „Programme“ ziehen, oder
-- im Terminal: `curl -fsSL https://raw.githubusercontent.com/TuttoBene1/Ablage-App/main/install.sh | bash`
+- Open **[Ablage.dmg](https://github.com/TuttoBene1/Ablage-App/releases/latest/download/Ablage.dmg)** and drag Ablage to Applications, or
+- run in Terminal: `curl -fsSL https://raw.githubusercontent.com/TuttoBene1/Ablage-App/main/install.sh | bash`
 
-Ablage ist nicht bei Apple notarisiert. Beim ersten Start (DMG) einmalig unter
-*Systemeinstellungen › Datenschutz & Sicherheit* auf **„Dennoch öffnen“** klicken.
+Ablage is not notarized by Apple. When installing from the DMG, open
+*System Settings › Privacy & Security* once and click **Open Anyway**.
 
-**Voraussetzungen:** macOS 15 Sequoia oder neuer · Apple Silicon und Intel (Universal)
+**Requirements:** macOS 15 Sequoia or later · Apple silicon and Intel (universal)
 
-### English
-
-Minimal menu bar app for screenshots, screen recordings and clipboard history. Not notarized: on first launch,
-click **“Open Anyway”** in *System Settings › Privacy & Security*. Requires macOS 15+, universal binary.
-
-Entwickelt von [Webforging](https://webforging.de) – Web- & E-Commerce-Agentur aus München.
+Made by [Webforging – App Development](https://webforging.de/app-entwicklung).

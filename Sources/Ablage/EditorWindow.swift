@@ -1,8 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Floating, minimal editor for one screenshot.
-/// ✓ copies the result to the clipboard and closes; „Kopieren" copies and stays open.
 @MainActor
 final class EditorController {
     private static var openEditors: [EditorController] = []
@@ -101,7 +99,7 @@ final class EditorController {
             }
         }
         switch event.keyCode {
-        case 36, 76: done(); return true // ↩
+        case KeyCode.return, KeyCode.enter: done(); return true
         default: break
         }
         switch key {
@@ -111,8 +109,6 @@ final class EditorController {
         }
     }
 }
-
-// MARK: - Views
 
 struct EditorView: View {
     @ObservedObject var doc: EditorDocument
@@ -144,7 +140,7 @@ struct EditorToolbar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            IconButton(symbol: "xmark", help: "Schließen ohne Übernehmen (esc)", action: onCancel)
+            IconButton(symbol: "xmark", help: "Close without copying (esc)", action: onCancel)
             Spacer(minLength: 10)
             HStack(spacing: 12) {
                 toolPicker
@@ -158,10 +154,10 @@ struct EditorToolbar: View {
                     .allowsHitTesting(drawingEnabled)
                 separator
                 HStack(spacing: 2) {
-                    IconButton(symbol: "arrow.uturn.backward", help: "Widerrufen (⌘Z)") { doc.undo() }
+                    IconButton(symbol: "arrow.uturn.backward", help: "Undo (⌘Z)") { doc.undo() }
                         .opacity(doc.canUndo ? 1 : 0.35)
                         .allowsHitTesting(doc.canUndo)
-                    IconButton(symbol: "arrow.uturn.forward", help: "Wiederholen (⇧⌘Z)") { doc.redo() }
+                    IconButton(symbol: "arrow.uturn.forward", help: "Redo (⇧⌘Z)") { doc.redo() }
                         .opacity(doc.canRedo ? 1 : 0.35)
                         .allowsHitTesting(doc.canRedo)
                 }
@@ -185,10 +181,10 @@ struct EditorToolbar: View {
 
     private var toolPicker: some View {
         HStack(spacing: 2) {
-            ToolToggle(symbol: "crop", selected: doc.tool == .crop, help: "Beschneiden (C)") {
+            ToolToggle(symbol: "crop", selected: doc.tool == .crop, help: "Crop (C)") {
                 doc.tool = .crop
             }
-            ToolToggle(symbol: "paintbrush.pointed", selected: doc.tool == .pen, help: "Pinsel (P)") {
+            ToolToggle(symbol: "paintbrush.pointed", selected: doc.tool == .pen, help: "Brush (P)") {
                 doc.tool = .pen
             }
         }
@@ -221,7 +217,7 @@ struct EditorToolbar: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help(["Fein", "Mittel", "Breit"][index])
+                .help(["Fine", "Medium", "Bold"][index])
             }
         }
     }
@@ -231,7 +227,7 @@ struct EditorToolbar: View {
             HStack(spacing: 5) {
                 Image(systemName: doc.justCopied ? "checkmark" : "doc.on.doc")
                     .font(.system(size: 11.5, weight: .semibold))
-                Text(doc.justCopied ? "Kopiert" : "Kopieren")
+                Text(doc.justCopied ? "Copied" : "Copy")
                     .font(.system(size: 12.5, weight: .medium))
             }
             .foregroundStyle(.primary)
@@ -242,7 +238,7 @@ struct EditorToolbar: View {
             .animation(.easeOut(duration: 0.15), value: doc.justCopied)
         }
         .buttonStyle(PressableStyle())
-        .help("In die Zwischenablage kopieren (⌘C)")
+        .help("Copy to clipboard (⌘C)")
     }
 
     private var doneButton: some View {
@@ -255,7 +251,7 @@ struct EditorToolbar: View {
                 .contentShape(Circle())
         }
         .buttonStyle(PressableStyle())
-        .help("Fertig – in die Zwischenablage und schließen (↩)")
+        .help("Done – copy and close (↩)")
     }
 }
 
@@ -304,7 +300,6 @@ private struct ColorSwatch: View {
     }
 }
 
-/// Empty toolbar space that drags the (borderless) editor window.
 struct WindowDragArea: NSViewRepresentable {
     final class DragView: NSView {
         override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }

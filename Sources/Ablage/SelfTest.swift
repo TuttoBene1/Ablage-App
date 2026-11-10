@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// `Ablage --selftest` opens the real panel with sample data and checks sizing and scrolling.
 @MainActor
 enum SelfTest {
     static func runIfRequested() -> Bool {
@@ -11,7 +10,7 @@ enum SelfTest {
         let store = ClipboardStore(directory: dir)
         DesignSnapshot.seed(store)
         for i in 1...14 {
-            var item = ClipItem(kind: .text, text: "Testeintrag Nummer \(i) mit etwas Text", sourceName: "Test")
+            var item = ClipItem(kind: .text, text: "Test item number \(i) with some text", sourceName: "Test")
             item.date = Date().addingTimeInterval(-Double(3000 + i * 60))
             store.addPrepared(item)
         }
@@ -41,7 +40,6 @@ enum SelfTest {
         print("hit view:", hit.map { String(describing: type(of: $0)) } ?? "nil",
               "inside scroll view:", hit?.isDescendant(of: scroll) ?? false)
 
-        // Synthesised trackpad-style scroll aimed at the middle of the list.
         let screenPoint = controller.panel.convertPoint(toScreen: probe)
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         if let cg = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: -120, wheel2: 0, wheel3: 0) {
@@ -69,7 +67,6 @@ enum SelfTest {
         print(ok ? "PASS: \(label)" : "FAIL: \(label)")
     }
 
-    /// Drives the real editor canvas with synthetic mouse events.
     private static func editorTests() {
         guard let image = DesignSnapshot.sampleCGImage(width: 400, height: 300) else {
             check(false, "sample image"); return
@@ -101,25 +98,21 @@ enum SelfTest {
             send(.leftMouseUp, b)
         }
 
-        // Pen
         doc.tool = .pen
         drag(from: CGPoint(x: 100, y: 100), to: CGPoint(x: 300, y: 200))
         check(doc.strokes.count == 1 && (doc.strokes.first?.points.count ?? 0) > 5, "pen draws a stroke")
 
-        // Crop: canvas shows the image 1:1 inside 22 pt padding.
         doc.tool = .crop
-        drag(from: CGPoint(x: 72, y: 72), to: CGPoint(x: 272, y: 172)) // image (50,50)-(250,150)
+        drag(from: CGPoint(x: 72, y: 72), to: CGPoint(x: 272, y: 172))
         let crop = doc.crop ?? .zero
         check(abs(crop.minX - 50) < 1 && abs(crop.width - 200) < 1 && abs(crop.height - 100) < 1,
               "crop frame drawn on image (got \(crop))")
 
-        // Resize from the top-right corner.
         drag(from: CGPoint(x: 272, y: 172), to: CGPoint(x: 322, y: 222))
         let resized = doc.crop ?? .zero
         check(abs(resized.width - 250) < 1.5 && abs(resized.height - 150) < 1.5,
               "crop corner resizes (got \(resized.size))")
 
-        // Rendered output: cropped size at 2x, with the stroke baked in.
         let rendered = doc.renderImage()
         check(rendered?.width == 500 && rendered?.height == 300,
               "render uses crop at Retina size (got \(rendered?.width ?? 0)×\(rendered?.height ?? 0))")

@@ -15,8 +15,6 @@ jobs:
     name: Build universal app
     runs-on: macos-latest
     env:
-      # Optional: a stable signing certificate keeps users' screen-recording
-      # permission across updates. Without it the app is signed ad-hoc.
       HAS_SIGNING_CERT: ${{ secrets.SIGNING_P12_BASE64 != '' }}
     steps:
       - uses: actions/checkout@v4

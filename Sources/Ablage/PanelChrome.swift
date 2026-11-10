@@ -1,9 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Borderless, non-activating floating panel. It can become key (for the search
-/// field and keyboard navigation) without stealing focus from the frontmost app,
-/// so windows in screenshots keep their active look.
+// Non-activating: the frontmost app keeps focus, so its windows keep their active look in screenshots.
 final class FloatingPanel: NSPanel {
     var keyHandler: ((NSEvent) -> Bool)?
     var onCancel: (() -> Void)?
@@ -31,7 +29,7 @@ final class FloatingPanel: NSPanel {
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown {
             if let keyHandler, keyHandler(event) { return }
-            if event.keyCode == 53 { onCancel?(); return } // esc, before the text field sees it
+            if event.keyCode == KeyCode.escape { onCancel?(); return }
         }
         super.sendEvent(event)
     }
@@ -41,15 +39,25 @@ final class FloatingPanel: NSPanel {
     }
 }
 
-/// NSHostingView that reacts to the very first click, even in a non-key window.
 final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+enum KeyCode {
+    static let `return`: UInt16 = 36
+    static let enter: UInt16 = 76
+    static let escape: UInt16 = 53
+    static let delete: UInt16 = 51
+    static let downArrow: UInt16 = 125
+    static let upArrow: UInt16 = 126
+    static let f: UInt16 = 3
+    static let p: UInt16 = 35
+    static let v: UInt16 = 9
 }
 
 enum Chrome {
     static let panelRadius: CGFloat = 18
 
-    /// Frosted background with real rounded corners (the blur itself is masked).
     static func background(radius: CGFloat, material: NSVisualEffectView.Material = .popover) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
@@ -99,8 +107,6 @@ enum Sounds {
     static func endRecording() { play("end_record.caf") }
 }
 
-/// Hover flag for SwiftUI rows and buttons (works without the @State macro,
-/// which needs a full Xcode install).
 final class HoverState: ObservableObject {
     @Published var on = false
 }

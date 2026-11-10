@@ -12,7 +12,6 @@ final class PanelModel: ObservableObject {
     }
     @Published var highlightedID: UUID?
     @Published var copiedID: UUID?
-    /// Bumped when the keyboard moves the selection, so the list scrolls along.
     @Published var keyboardScrollTick = 0
     @Published var focusSearchTick = 0
 
@@ -60,8 +59,6 @@ final class PanelModel: ObservableObject {
         keyboardScrollTick += 1
     }
 
-    /// Mouse hover selects a row, unless the keyboard just moved the selection
-    /// (rows scrolling under a resting pointer would otherwise steal it).
     func hover(_ id: UUID) {
         guard Date().timeIntervalSince(lastKeyboardMove) > 0.35 else { return }
         highlightedID = id
@@ -81,19 +78,18 @@ final class PanelModel: ObservableObject {
         }
     }
 
-    /// Keyboard handling for the panel. Returns true when the event was consumed.
     func handleKey(_ event: NSEvent) -> Bool {
         guard route == .clipboard else { return false }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         switch event.keyCode {
-        case 53 where !query.isEmpty: query = ""; return true // esc clears the search first
-        case 125: moveHighlight(1); return true            // ↓
-        case 126: moveHighlight(-1); return true           // ↑
-        case 36, 76: copyHighlighted(); return true        // ↩ / enter
-        case 51 where flags.contains(.command):              // ⌘⌫ delete entry
+        case KeyCode.escape where !query.isEmpty: query = ""; return true
+        case KeyCode.downArrow: moveHighlight(1); return true
+        case KeyCode.upArrow: moveHighlight(-1); return true
+        case KeyCode.return, KeyCode.enter: copyHighlighted(); return true
+        case KeyCode.delete where flags.contains(.command):
             if let id = highlightedID { delete(id) }
             return true
-        case 35 where flags.contains(.command):              // ⌘P pin
+        case KeyCode.p where flags.contains(.command):
             if let id = highlightedID { store.togglePin(id) }
             return true
         default: return false
@@ -109,8 +105,6 @@ final class PanelModel: ObservableObject {
             highlightedID = remaining[min(index, remaining.count - 1)].id
         }
     }
-
-    // MARK: Login item
 
     var launchAtLogin: Bool {
         get { SMAppService.mainApp.status == .enabled }

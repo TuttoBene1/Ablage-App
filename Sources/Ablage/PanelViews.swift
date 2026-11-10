@@ -6,10 +6,6 @@ enum PanelMetrics {
     static let clipboardHeight: CGFloat = 468
 }
 
-// MARK: - Root
-
-/// The panel window itself is sized by `StatusBarController` per route;
-/// the content stays pinned to the top while the window animates.
 struct PanelRootView: View {
     @ObservedObject var model: PanelModel
     @ObservedObject var store: ClipboardStore
@@ -35,28 +31,26 @@ struct PanelRootView: View {
     }
 }
 
-// MARK: - Home
-
 struct HomeView: View {
     @ObservedObject var model: PanelModel
     @ObservedObject var store: ClipboardStore
 
     private var countText: String {
         let count = store.items.count
-        if count == 0 { return "Leer" }
-        return count == 1 ? "1 Eintrag" : "\(count) Einträge"
+        if count == 0 { return "Empty" }
+        return count == 1 ? "1 item" : "\(count) items"
     }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 ActionTile(symbol: "camera.viewfinder",
-                           title: "Bildschirmfoto",
-                           subtitle: "Foto oder Video") {
+                           title: "Screenshot",
+                           subtitle: "Photo or video") {
                     model.onScreenshot?()
                 }
                 ActionTile(symbol: "list.clipboard",
-                           title: "Zwischenablage",
+                           title: "Clipboard",
                            subtitle: countText,
                            showsChevron: true) {
                     model.showClipboard()
@@ -68,26 +62,40 @@ struct HomeView: View {
 
             HStack {
                 Button { NSWorkspace.shared.open(AppInfo.website) } label: {
-                    Text("Ablage · by Webforging")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.tertiary)
+                    HStack(spacing: 5) {
+                        Text("Ablage · by")
+                            .font(.system(size: 11, weight: .medium))
+                        if let logo = AppInfo.webforgingLogo {
+                            Image(nsImage: logo)
+                                .renderingMode(.template)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 11)
+                                .accessibilityLabel("Webforging")
+                        } else {
+                            Text("Webforging")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                    }
+                    .foregroundStyle(.tertiary)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("webforging.de öffnen")
+                .help("Webforging – App Development")
                 Spacer()
                 Menu {
-                    Toggle("Beim Anmelden öffnen", isOn: Binding(
+                    Toggle("Open at Login", isOn: Binding(
                         get: { model.launchAtLogin },
                         set: { model.launchAtLogin = $0 }
                     ))
                     Divider()
-                    Button("Über Ablage") {
+                    Button("About Ablage") {
                         model.onClose?()
                         AppInfo.showAbout()
                     }
-                    Button("Ablage auf GitHub") { NSWorkspace.shared.open(AppInfo.repository) }
+                    Button("Ablage on GitHub") { NSWorkspace.shared.open(AppInfo.repository) }
                     Divider()
-                    Button("Ablage beenden") { model.onQuit?() }
+                    Button("Quit Ablage") { model.onQuit?() }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                         .font(.system(size: 13, weight: .regular))
@@ -96,7 +104,7 @@ struct HomeView: View {
                 .menuIndicator(.hidden)
                 .fixedSize()
                 .foregroundStyle(.secondary)
-                .help("Optionen")
+                .help("Options")
             }
             .padding(.horizontal, 16)
             .frame(height: 34)
@@ -187,8 +195,6 @@ struct IconButton: View {
     }
 }
 
-// MARK: - Clipboard
-
 struct ClipboardView: View {
     @ObservedObject var model: PanelModel
     @ObservedObject var store: ClipboardStore
@@ -214,13 +220,13 @@ struct ClipboardView: View {
 
     private var header: some View {
         ZStack {
-            Text("Zwischenablage")
+            Text("Clipboard")
                 .font(.system(size: 13, weight: .semibold))
             HStack {
-                IconButton(symbol: "chevron.left", help: "Zurück") { model.showHome() }
+                IconButton(symbol: "chevron.left", help: "Back") { model.showHome() }
                 Spacer()
                 Menu {
-                    Button("Verlauf leeren") { store.clearHistory() }
+                    Button("Clear History") { store.clearHistory() }
                         .disabled(!store.items.contains { !$0.pinned })
                 } label: {
                     Image(systemName: "ellipsis")
@@ -231,7 +237,7 @@ struct ClipboardView: View {
                 .fixedSize()
                 .foregroundStyle(.secondary)
                 .padding(.trailing, 6)
-                .help("Optionen")
+                .help("Options")
             }
         }
         .padding(.horizontal, 8)
@@ -243,7 +249,7 @@ struct ClipboardView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-            TextField("Suchen", text: $model.query)
+            TextField("Search", text: $model.query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .focused($searchFocused)
@@ -275,11 +281,11 @@ struct ClipboardView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 1) {
                         if !pinned.isEmpty {
-                            SectionLabel(title: "Angeheftet")
+                            SectionLabel(title: "Pinned")
                             ForEach(pinned) { row($0) }
                         }
                         if !recent.isEmpty {
-                            SectionLabel(title: "Verlauf")
+                            SectionLabel(title: "Recent")
                             ForEach(recent) { row($0) }
                         }
                     }
@@ -311,11 +317,11 @@ struct ClipboardView: View {
             Image(systemName: model.query.isEmpty ? "list.clipboard" : "magnifyingglass")
                 .font(.system(size: 28, weight: .light))
                 .foregroundStyle(.tertiary)
-            Text(model.query.isEmpty ? "Noch nichts kopiert" : "Keine Treffer")
+            Text(model.query.isEmpty ? "Nothing copied yet" : "No results")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
             if model.query.isEmpty {
-                Text("Kopierte Texte, Bilder und Dateien\nerscheinen hier.")
+                Text("Copied text, images and files\nshow up here.")
                     .font(.system(size: 11))
                     .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
@@ -382,13 +388,13 @@ struct ClipRow: View {
             if inside { onHover() }
         }
         .contextMenu {
-            Button("Kopieren", action: onCopy)
-            Button(item.pinned ? "Lösen" : "Anheften", action: onPin)
+            Button("Copy", action: onCopy)
+            Button(item.pinned ? "Unpin" : "Pin", action: onPin)
             if item.kind == .files, let url = item.fileURLs.first {
-                Button("Im Finder zeigen") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) }
             }
             Divider()
-            Button("Löschen", action: onDelete)
+            Button("Delete", action: onDelete)
         }
     }
 
@@ -440,7 +446,7 @@ struct ClipRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(item.pinned ? "Lösen" : "Anheften")
+            .help(item.pinned ? "Unpin" : "Pin")
         }
     }
 
@@ -475,13 +481,13 @@ struct SymbolBadge: View {
 enum RelativeTime {
     private static let formatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
-        formatter.locale = Locale(identifier: "de_DE")
+        formatter.locale = Locale(identifier: "en_US")
         formatter.unitsStyle = .short
         return formatter
     }()
 
     static func string(for date: Date) -> String {
-        if Date().timeIntervalSince(date) < 60 { return "Gerade eben" }
+        if Date().timeIntervalSince(date) < 60 { return "Just now" }
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 }

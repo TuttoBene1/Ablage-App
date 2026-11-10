@@ -18,15 +18,11 @@ final class CaptureController: ObservableObject {
     private var frameWindow: NSWindow?
     private var isBusy = false
 
-    // MARK: Selection
-
     func beginSelection() {
         guard overlays.isEmpty, !recorder.isRecording, !isBusy else { return }
         isBusy = true
         Task { @MainActor in
-            // Ask ScreenCaptureKit itself: it reflects the live permission state, whereas
-            // CGPreflightScreenCaptureAccess() stays stale until the app is restarted and
-            // made Ablage ask again although access had already been granted.
+            // Ask ScreenCaptureKit directly: CGPreflightScreenCaptureAccess() stays stale until the app restarts.
             do {
                 _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
             } catch {
@@ -56,7 +52,6 @@ final class CaptureController: ObservableObject {
         dismissOverlays()
     }
 
-    /// `rect` is in the screen's own coordinate space: points, origin top-left.
     func complete(rect: CGRect, on screen: NSScreen) {
         let mode = self.mode
         dismissOverlays()
@@ -75,17 +70,15 @@ final class CaptureController: ObservableObject {
         overlays.removeAll()
         closing.forEach { $0.orderOut(nil) }
         NSCursor.arrow.set()
-        // Release on the next turn of the run loop: we may be inside one of their event handlers.
+        // Release later: this may run inside one of the overlays' own event handlers.
         DispatchQueue.main.async { withExtendedLifetime(closing) {} }
     }
-
-    // MARK: Screenshot
 
     private func takeScreenshot(rect: CGRect, screen: NSScreen) async {
         do {
             let image = try await ScreenGrabber.capture(rect: rect, screen: screen)
             let rep = NSBitmapImageRep(cgImage: image)
-            rep.size = rect.size // keeps Retina density (144 dpi) in the PNG
+            rep.size = rect.size
             guard let png = rep.representation(using: .png, properties: [:]) else { return }
             PasteboardWriter.writeImage(png: png, origin: PasteboardOrigin.screenshotName)
             Sounds.shutter()
@@ -97,8 +90,6 @@ final class CaptureController: ObservableObject {
             presentError(error)
         }
     }
-
-    // MARK: Recording
 
     private func startRecording(rect: CGRect, screen: NSScreen) async {
         do {
@@ -117,7 +108,7 @@ final class CaptureController: ObservableObject {
             let url = await recorder.stop()
             onRecordingChange?(false)
             guard let url else {
-                Toast.shared.show(symbol: "exclamationmark.triangle", title: "Aufnahme fehlgeschlagen", subtitle: nil, on: nil)
+                Toast.shared.show(symbol: "exclamationmark.triangle", title: "Recording failed", subtitle: nil, on: nil)
                 return
             }
             Sounds.endRecording()
@@ -125,8 +116,8 @@ final class CaptureController: ObservableObject {
             let thumbnail = await Self.thumbnail(for: url)
             Toast.shared.show(image: thumbnail,
                               symbol: "film",
-                              title: "Aufnahme gesichert",
-                              subtitle: "In „Filme“ · Klicken zum Zeigen",
+                              title: "Recording saved",
+                              subtitle: "Saved to Movies · Click to show",
                               on: nil,
                               duration: 4) {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -173,13 +164,11 @@ final class CaptureController: ObservableObject {
             return
         }
         Toast.shared.show(symbol: "exclamationmark.triangle",
-                          title: "Aufnahme nicht möglich",
+                          title: "Capture failed",
                           subtitle: error.localizedDescription,
                           on: nil)
     }
 }
-
-// MARK: - Permission
 
 @MainActor
 enum ScreenPermission {
@@ -191,16 +180,14 @@ enum ScreenPermission {
         return nsError.domain == SCStreamErrorDomain && nsError.code == SCStreamError.Code.userDeclined.rawValue
     }
 
-    /// Called only after ScreenCaptureKit actually refused, never on a stale pre-check.
     static func handle(_ error: Error) {
         guard isPermissionError(error) else {
             NSLog("Ablage capture error: \(error)")
-            Toast.shared.show(symbol: "exclamationmark.triangle", title: "Aufnahme nicht möglich",
+            Toast.shared.show(symbol: "exclamationmark.triangle", title: "Capture failed",
                               subtitle: error.localizedDescription, on: nil)
             return
         }
         if !UserDefaults.standard.bool(forKey: requestedKey) {
-            // Very first time: let macOS show its own prompt instead of ours.
             UserDefaults.standard.set(true, forKey: requestedKey)
             _ = CGRequestScreenCaptureAccess()
             return
@@ -211,10 +198,10 @@ enum ScreenPermission {
     static func showSettingsAlert() {
         NSApp.activate()
         let alert = NSAlert()
-        alert.messageText = "Bildschirmaufnahme erlauben"
-        alert.informativeText = "macOS hat Ablage die Bildschirmaufnahme verweigert. Aktiviere „Ablage“ unter Systemeinstellungen › Datenschutz & Sicherheit › Bildschirm- & Systemaudioaufnahme. Ist es dort schon aktiviert, schalte es einmal aus und wieder ein."
-        alert.addButton(withTitle: "Systemeinstellungen öffnen")
-        alert.addButton(withTitle: "Abbrechen")
+        alert.messageText = "Allow Screen Recording"
+        alert.informativeText = "macOS denied Ablage access to the screen. Turn on “Ablage” in System Settings › Privacy & Security › Screen & System Audio Recording. If it is already on, turn it off and on again."
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Cancel")
         if alert.runModal() == .alertFirstButtonReturn,
            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
             NSWorkspace.shared.open(url)
@@ -222,17 +209,13 @@ enum ScreenPermission {
     }
 }
 
-// MARK: - ScreenCaptureKit helpers
-
 enum CaptureError: LocalizedError {
     case displayNotFound
-    var errorDescription: String? { "Der Bildschirm wurde nicht gefunden." }
+    var errorDescription: String? { "The display could not be found." }
 }
 
 @MainActor
 enum ScreenGrabber {
-    /// Content filter for one display that leaves out Ablage's own windows
-    /// (dimming overlay, panel, toasts, recording frame).
     static func filter(for screen: NSScreen) async throws -> SCContentFilter {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         let displayID = screen.displayID
@@ -257,8 +240,7 @@ enum ScreenGrabber {
     }
 }
 
-/// Lets the crosshair cursor show while another app stays frontmost
-/// (Ablage never activates itself, so windows in the screenshot keep their active look).
+// Private CoreGraphics flag that lets the crosshair show while another app stays frontmost.
 @MainActor
 enum BackgroundCursor {
     private typealias ConnectionFn = @convention(c) () -> Int32
@@ -275,8 +257,6 @@ enum BackgroundCursor {
         _ = unsafeBitCast(setProperty, to: SetPropertyFn.self)(cid, cid, "SetsCursorInBackground" as CFString, kCFBooleanTrue)
     }
 }
-
-// MARK: - Recording frame
 
 final class RecordingFrameView: NSView {
     override func draw(_ dirtyRect: NSRect) {

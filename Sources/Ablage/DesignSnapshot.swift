@@ -1,8 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// `Ablage --snapshot <folder>` renders the UI with sample data to PNGs
-/// (light + dark) without touching the real clipboard history. Used to check the design.
 @MainActor
 enum DesignSnapshot {
     static func runIfRequested() -> Bool {
@@ -32,12 +30,11 @@ enum DesignSnapshot {
                   to: folder.appendingPathComponent("clipboard-\(name).png"))
 
             let toast = ToastView(image: sampleImage(width: 320, height: 200), symbol: nil,
-                                  title: "Bildschirmfoto kopiert", subtitle: "Mit ⌘V einfügen",
+                                  title: "Screenshot copied", subtitle: "Press ⌘V to paste",
                                   tappable: false, onTap: {})
             write(render(toast, appearance: appearance, background: backdrop(appearance), radius: ToastView.radius),
                   to: folder.appendingPathComponent("toast-\(name).png"))
 
-            // Editor: pen mode with two annotations, then crop mode.
             let doc = sampleEditorDocument()
             let size = EditorController.windowSize(for: doc.fullRect.size, on: NSScreen.main)
             let editorBackground = appearance.name == .darkAqua
@@ -60,7 +57,6 @@ enum DesignSnapshot {
             }
         }
 
-        // Preview card (normal + hovered) on a desktop-like background.
         if let image = sampleCGImage(width: 900, height: 560) {
             for hovering in [false, true] {
                 let model = PreviewModel()
@@ -105,7 +101,6 @@ enum DesignSnapshot {
         return doc
     }
 
-    /// A fake app window on a gradient, rendered at 2x like a Retina screenshot.
     static func sampleCGImage(width: CGFloat, height: CGFloat) -> CGImage? {
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(width * 2), pixelsHigh: Int(height * 2),
                                          bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -188,8 +183,6 @@ enum DesignSnapshot {
         try? data.write(to: url)
     }
 
-    // MARK: Sample data
-
     static func seed(_ store: ClipboardStore) {
         let now = Date()
         func text(_ value: String, _ app: String, _ bundle: String, minutesAgo: Double, pinned: Bool = false) -> ClipItem {
@@ -198,11 +191,11 @@ enum DesignSnapshot {
             item.pinned = pinned
             return item
         }
-        store.addPrepared(text("Musterstraße 12, 10115 Berlin", "Notizen", "com.apple.Notes", minutesAgo: 60 * 26, pinned: true))
-        store.addPrepared(text("Wir sehen uns um 14 Uhr im Café am Markt – ich reserviere einen Tisch für vier.", "Nachrichten", "com.apple.MobileSMS", minutesAgo: 60 * 50, pinned: true))
+        store.addPrepared(text("Marienplatz 1, 80331 Munich", "Notes", "com.apple.Notes", minutesAgo: 60 * 26, pinned: true))
+        store.addPrepared(text("See you at 2 pm at the café on the square – I’ll book a table for four.", "Messages", "com.apple.MobileSMS", minutesAgo: 60 * 50, pinned: true))
         store.addPrepared(text("https://developer.apple.com/design/human-interface-guidelines/", "Safari", "com.apple.Safari", minutesAgo: 0.3))
-        store.addPrepared(text("git commit -m \"Layout der Seitenleiste angepasst\"", "Terminal", "com.apple.Terminal", minutesAgo: 12))
-        store.addPrepared(text("Vielen Dank für die schnelle Rückmeldung! Anbei die überarbeitete Version mit den besprochenen Änderungen.", "Mail", "com.apple.mail", minutesAgo: 95))
+        store.addPrepared(text("git commit -m \"Polish sidebar layout\"", "Terminal", "com.apple.Terminal", minutesAgo: 12))
+        store.addPrepared(text("Thanks for the quick reply! Attached is the revised version with the changes we discussed.", "Mail", "com.apple.mail", minutesAgo: 95))
 
         if let png = sampleImage(width: 2560, height: 1440).flatMap(pngData) {
             let file = UUID().uuidString + ".png"
@@ -215,7 +208,7 @@ enum DesignSnapshot {
             store.addPrepared(item)
         }
 
-        var file = ClipItem(kind: .files, filePaths: ["/Users/Shared/Präsentation Q4.key"], sourceBundleID: "com.apple.finder", sourceName: "Finder")
+        var file = ClipItem(kind: .files, filePaths: ["/Users/Shared/Q4 Presentation.key"], sourceBundleID: "com.apple.finder", sourceName: "Finder")
         file.date = now.addingTimeInterval(-40 * 60)
         store.addPrepared(file)
     }

@@ -1,11 +1,6 @@
 #!/bin/bash
-# Makes sure a local, self-signed code-signing identity exists and prints the
-# path of the keychain that holds it.
-#
-# Why: an ad-hoc signature changes with every build, so macOS treats each new
-# build as a different app and forgets the screen-recording permission.
-# Signing with the same certificate every time keeps the permission across updates.
-# The identity lives in its own small keychain (not the login keychain).
+# Ensures a self-signed code-signing identity in its own keychain and prints the keychain path.
+# Ad-hoc signatures change with every build, which makes macOS forget the screen-recording permission.
 set -euo pipefail
 
 NAME="Ablage Local Signing"
@@ -33,7 +28,6 @@ if [ ! -f "$KEYCHAIN" ] || [ ! -f "$PASSFILE" ]; then
   openssl pkcs12 -export -inkey "$TMP/key.pem" -in "$TMP/cert.pem" -name "$NAME" \
     -out "$TMP/identity.p12" -passout "pass:$P12PASS"
 
-  # create-keychain adds the new keychain to the search list; restore the list afterwards.
   ORIGINAL=()
   while IFS= read -r line; do
     line="${line#"${line%%[![:space:]]*}"}"; line="${line%\"}"; line="${line#\"}"

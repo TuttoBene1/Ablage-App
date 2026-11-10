@@ -2,9 +2,6 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Shows the screenshot and handles drawing and cropping.
-/// In crop mode the whole image is shown with a movable crop frame;
-/// otherwise only the cropped part is shown, scaled to fit.
 final class EditorCanvasView: NSView {
     private let doc: EditorDocument
     private var observer: AnyCancellable?
@@ -47,8 +44,6 @@ final class EditorCanvasView: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    // MARK: Geometry
-
     private var shownRect: CGRect { doc.tool == .crop ? doc.fullRect : doc.visibleRect }
 
     private var layoutInfo: (scale: CGFloat, frame: CGRect) {
@@ -88,8 +83,6 @@ final class EditorCanvasView: NSView {
         return CGPoint(x: min(max(point.x, full.minX), full.maxX), y: min(max(point.y, full.minY), full.maxY))
     }
 
-    // MARK: Drawing
-
     override func draw(_ dirtyRect: NSRect) {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         let (scale, frame) = layoutInfo
@@ -127,7 +120,6 @@ final class EditorCanvasView: NSView {
         ctx.setFillColor(NSColor.black.withAlphaComponent(0.5).cgColor)
         ctx.fillPath(using: .evenOdd)
 
-        // Rule of thirds.
         ctx.setStrokeColor(NSColor.white.withAlphaComponent(0.35).cgColor)
         ctx.setLineWidth(0.5)
         for i in 1...2 {
@@ -142,9 +134,8 @@ final class EditorCanvasView: NSView {
         ctx.setLineWidth(1)
         ctx.stroke(crop.insetBy(dx: 0.5, dy: 0.5))
 
-        // Corner brackets.
         let length = min(20, crop.width / 2 + 2, crop.height / 2 + 2)
-        let inset: CGFloat = -2 // brackets sit just outside the frame, on the dimmed area
+        let inset: CGFloat = -2
         ctx.setLineWidth(4)
         ctx.setLineCap(.round)
         ctx.setShadow(offset: .zero, blur: 2, color: NSColor.black.withAlphaComponent(0.4).cgColor)
@@ -162,8 +153,6 @@ final class EditorCanvasView: NSView {
         ctx.strokePath()
         ctx.restoreGState()
     }
-
-    // MARK: Mouse
 
     override func mouseDown(with event: NSEvent) {
         window?.makeKey()
@@ -259,8 +248,6 @@ final class EditorCanvasView: NSView {
         if edges.contains(.top) && edges.contains(.bottom) { edges.remove(.bottom) }
         return edges.isEmpty ? nil : edges
     }
-
-    // MARK: Cursor
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

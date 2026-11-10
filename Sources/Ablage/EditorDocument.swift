@@ -2,9 +2,9 @@ import AppKit
 import Combine
 
 struct EditorStroke {
-    var points: [CGPoint]   // image space: points, origin bottom-left
+    var points: [CGPoint] // image space: points, origin bottom-left
     var color: CGColor
-    var width: CGFloat      // image points
+    var width: CGFloat
 }
 
 enum EditorTool { case crop, pen }
@@ -14,12 +14,9 @@ enum EditorPalette {
         .systemRed, .systemOrange, .systemYellow, .systemGreen,
         .systemBlue, .systemPurple, .black, .white,
     ]
-    /// Stroke widths as they appear on screen.
     static let widths: [CGFloat] = [2.5, 5, 10]
 }
 
-/// The editable screenshot: original image plus pen strokes and an optional crop.
-/// Nothing is baked in until the image is rendered for the clipboard.
 @MainActor
 final class EditorDocument: ObservableObject {
     let image: CGImage
@@ -50,20 +47,16 @@ final class EditorDocument: ObservableObject {
     var color: NSColor { EditorPalette.colors[colorIndex] }
     var visibleRect: CGRect { crop ?? fullRect }
 
-    // MARK: Editing
-
     func addStroke(_ stroke: EditorStroke) {
         pushUndo()
         strokes.append(stroke)
     }
 
-    /// Live update while dragging the crop frame (no undo step yet).
     func setCropLive(_ rect: CGRect) {
         let clamped = rect.intersection(fullRect)
         crop = clamped.isNull || clamped.equalTo(fullRect) ? nil : clamped
     }
 
-    /// Ends a crop drag; records one undo step if something changed.
     func commitCrop(previous: CGRect?) {
         if let current = crop, current.width < 8 || current.height < 8 {
             crop = previous
@@ -120,13 +113,10 @@ final class EditorDocument: ObservableObject {
         canRedo = !redoStack.isEmpty
     }
 
-    // MARK: Output
-
-    /// Renders the cropped image with all strokes at full (Retina) resolution.
     func renderPNG() -> Data? {
         guard let output = renderImage() else { return nil }
         let rep = NSBitmapImageRep(cgImage: output)
-        rep.size = visibleRect.size // keep the original point size / dpi
+        rep.size = visibleRect.size
         return rep.representation(using: .png, properties: [:])
     }
 
@@ -153,7 +143,6 @@ final class EditorDocument: ObservableObject {
 }
 
 enum EditorRenderer {
-    /// Smooth path through the sampled points (quadratic curves via midpoints).
     static func path(for points: [CGPoint]) -> CGPath {
         let path = CGMutablePath()
         guard let first = points.first else { return path }

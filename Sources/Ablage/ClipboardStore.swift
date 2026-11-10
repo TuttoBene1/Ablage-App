@@ -21,7 +21,6 @@ struct ClipItem: Identifiable, Codable, Equatable {
 
     var fileURLs: [URL] { (filePaths ?? []).map { URL(fileURLWithPath: $0) } }
 
-    /// Single-line friendly preview.
     var title: String {
         switch kind {
         case .text:
@@ -30,11 +29,11 @@ struct ClipItem: Identifiable, Codable, Equatable {
                 .joined(separator: " ")
             return String(collapsed.prefix(400))
         case .image:
-            return sourceName == PasteboardOrigin.screenshotName ? "Bildschirmfoto" : "Bild"
+            return sourceName == PasteboardOrigin.screenshotName ? "Screenshot" : "Image"
         case .files:
             let urls = fileURLs
             if urls.count == 1 { return urls[0].lastPathComponent }
-            return "\(urls.count) Objekte"
+            return "\(urls.count) items"
         }
     }
 
@@ -43,24 +42,22 @@ struct ClipItem: Identifiable, Codable, Equatable {
         guard !q.isEmpty else { return true }
         switch kind {
         case .text: return (text ?? "").localizedStandardContains(q)
-        case .image: return title.localizedStandardContains(q) || "bild".localizedStandardContains(q) || (sourceName ?? "").localizedStandardContains(q)
+        case .image: return title.localizedStandardContains(q) || "image".localizedStandardContains(q) || (sourceName ?? "").localizedStandardContains(q)
         case .files: return (filePaths ?? []).contains { $0.localizedStandardContains(q) }
         }
     }
 }
 
-/// Marks pasteboard contents written by Ablage itself (screenshots, recordings).
 enum PasteboardOrigin {
     static let type = NSPasteboard.PasteboardType("local.ablage.origin")
-    static let screenshotName = "Bildschirmfoto"
-    static let recordingName = "Bildschirmaufnahme"
+    static let screenshotName = "Screenshot"
+    static let recordingName = "Screen Recording"
 }
 
 @MainActor
 final class ClipboardStore: ObservableObject {
     @Published private(set) var items: [ClipItem] = []
 
-    /// Unpinned entries kept in the history. Pinned entries are never pushed out.
     let maxRecent = 25
 
     private let pasteboard = NSPasteboard.general
@@ -74,7 +71,7 @@ final class ClipboardStore: ObservableObject {
     var imagesDirectory: URL { directory.appendingPathComponent("Images", isDirectory: true) }
     private var historyURL: URL { directory.appendingPathComponent("history.json") }
 
-    /// Pasteboard types that signal passwords or other content that must not be recorded.
+    // Set by password managers and other apps for content that must not be recorded.
     private static let ignoredTypes: Set<String> = [
         "org.nspasteboard.ConcealedType",
         "org.nspasteboard.TransientType",
@@ -92,8 +89,6 @@ final class ClipboardStore: ObservableObject {
     }
 
     var pinnedCount: Int { items.filter(\.pinned).count }
-
-    // MARK: Monitoring
 
     func start() {
         load()
@@ -122,7 +117,6 @@ final class ClipboardStore: ObservableObject {
             sourceBundleID = app.bundleIdentifier
         }
 
-        // Follow the owner's preferred order of representations.
         for type in types {
             switch type {
             case .fileURL:
@@ -173,7 +167,6 @@ final class ClipboardStore: ObservableObject {
         let url = imagesDirectory.appendingPathComponent(fileName)
 
         Task { @MainActor [weak self] in
-            // Decode / re-encode off the main thread; large TIFFs can take a moment.
             let dimensions: (Int, Int)? = await Task.detached(priority: .userInitiated) {
                 guard let rep = NSBitmapImageRep(data: data) else { return nil }
                 let png = isPNG ? data : rep.representation(using: .png, properties: [:])
@@ -192,13 +185,11 @@ final class ClipboardStore: ObservableObject {
         }
     }
 
-    /// Adds a prepared entry directly (used by the `--snapshot` design preview).
     func addPrepared(_ item: ClipItem) {
         items.append(item)
         items.sort { $0.date > $1.date }
     }
 
-    /// Moves an existing identical entry to the top instead of creating a duplicate.
     private func bumpExisting(where predicate: (ClipItem) -> Bool, sourceName: String?, bundleID: String?) -> Bool {
         guard let index = items.firstIndex(where: predicate) else { return false }
         var item = items.remove(at: index)
@@ -228,8 +219,6 @@ final class ClipboardStore: ObservableObject {
         removed.forEach(deleteFiles)
     }
 
-    // MARK: Actions
-
     func copyToPasteboard(_ item: ClipItem) {
         pasteboard.clearContents()
         switch item.kind {
@@ -242,7 +231,6 @@ final class ClipboardStore: ObservableObject {
         case .files:
             pasteboard.writeObjects(item.fileURLs as [NSURL])
         }
-        // Our own write: don't re-import, just move the entry to the top.
         lastChangeCount = pasteboard.changeCount
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             var moved = items.remove(at: index)
@@ -274,8 +262,6 @@ final class ClipboardStore: ObservableObject {
         removed.forEach(deleteFiles)
         scheduleSave()
     }
-
-    // MARK: Images & icons
 
     func imageURL(for item: ClipItem) -> URL? {
         guard let file = item.imageFile else { return nil }
@@ -317,8 +303,6 @@ final class ClipboardStore: ObservableObject {
         return icon
     }
 
-    // MARK: Persistence
-
     private func deleteFiles(_ item: ClipItem) {
         guard let url = imageURL(for: item) else { return }
         thumbnails.removeObject(forKey: item.id.uuidString as NSString)
@@ -334,7 +318,6 @@ final class ClipboardStore: ObservableObject {
             guard let url = imageURL(for: item) else { return false }
             return fm.fileExists(atPath: url.path)
         }
-        // Remove image files that are no longer referenced.
         let referenced = Set(items.compactMap(\.imageFile))
         if let files = try? fm.contentsOfDirectory(atPath: imagesDirectory.path) {
             for file in files where !referenced.contains(file) {
