@@ -8,6 +8,8 @@ enum SelfTest {
         guard CommandLine.arguments.contains("--selftest") else { return false }
         editorTests()
         shortcutTests()
+        quickPasteTests()
+        frozenCropTests()
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ablage-selftest-\(UUID().uuidString)")
         let store = ClipboardStore(directory: dir)
         DesignSnapshot.seed(store)
@@ -130,10 +132,41 @@ enum SelfTest {
         window.orderOut(nil)
     }
 
+    private static func frozenCropTests() {
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        guard let ctx = CGContext(data: nil, width: 200, height: 160, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        ctx.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 80, width: 200, height: 80))
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: 200, height: 80))
+        guard let frozen = ctx.makeImage() else { return }
+        let screen = CGSize(width: 100, height: 80)
+
+        let top = ScreenGrabber.crop(frozen, to: CGRect(x: 10, y: 5, width: 30, height: 20), screenSize: screen)
+        check(top?.width == 60 && top?.height == 40, "frozen crop uses Retina pixels (got \(top?.width ?? 0)×\(top?.height ?? 0))")
+        check(isMostlyRed(top), "a selection at the top crops the top of the frozen screen")
+        let bottom = ScreenGrabber.crop(frozen, to: CGRect(x: 10, y: 60, width: 30, height: 10), screenSize: screen)
+        check(bottom.map { !isMostlyRed($0) } == true, "a selection at the bottom crops the bottom")
+    }
+
+    private static func isMostlyRed(_ image: CGImage?) -> Bool {
+        guard let image,
+              let ctx = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        guard let pixel = ctx.data?.bindMemory(to: UInt8.self, capacity: 4) else { return false }
+        return pixel[0] > 200 && pixel[2] < 60
+    }
+
     private static func shortcutTests() {
         check(Shortcut.screenshotDefault.displayString == "⇧⌘2",
-              "default shortcut reads ⇧⌘2 (got \(Shortcut.screenshotDefault.displayString))")
-        check(!Shortcut.screenshotDefault.isUsedByMacOS, "⇧⌘2 is not a macOS shortcut")
+              "default screenshot shortcut reads ⇧⌘2 (got \(Shortcut.screenshotDefault.displayString))")
+        check(Shortcut.clipboardDefault.displayString == "⌥⌘V",
+              "default paste shortcut reads ⌥⌘V (got \(Shortcut.clipboardDefault.displayString))")
+        check(!Shortcut.screenshotDefault.isUsedByMacOS && !Shortcut.clipboardDefault.isUsedByMacOS,
+              "⇧⌘2 and ⌥⌘V are not macOS shortcuts")
         check(!Shortcut(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(cmdKey)).isUsableGlobally, "⌘A alone is rejected")
         check(!Shortcut(keyCode: UInt32(kVK_ANSI_E), modifiers: UInt32(optionKey | shiftKey)).isUsableGlobally,
               "⌥⇧E is rejected (types characters)")
@@ -143,41 +176,81 @@ enum SelfTest {
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         let settings = ShortcutSettings(defaults: defaults, hotKeys: .shared)
-        check(settings.screenshot == .screenshotDefault, "without a saved value the default is used")
+        check(settings.screenshot == .screenshotDefault && settings.shortcut(for: .clipboard) == .clipboardDefault,
+              "without saved values both defaults are used")
 
-        settings.startRecording()
+        settings.startRecording(.screenshot)
         _ = settings.handle(keyEvent(kVK_ANSI_A, []))
         check(settings.isRecording && settings.message != nil, "a plain letter keeps recording and shows a hint")
 
         let areaShortcut = Shortcut(keyCode: UInt32(kVK_ANSI_4), modifiers: UInt32(cmdKey | shiftKey))
         if areaShortcut.isUsedByMacOS {
             _ = settings.handle(keyEvent(kVK_ANSI_4, [.command, .shift]))
-            check(settings.message?.contains("macOS") == true && settings.screenshot == .screenshotDefault,
+            check(settings.message?.text.contains("macOS") == true && settings.screenshot == .screenshotDefault,
                   "⇧⌘4 is refused while macOS uses it")
-            settings.startRecording()
+            settings.startRecording(.screenshot)
         }
 
+        _ = settings.handle(keyEvent(kVK_ANSI_V, [.command, .option]))
+        check(settings.message?.text.contains("Paste from History") == true && settings.screenshot == .screenshotDefault,
+              "a shortcut already used by the other action is refused")
+
+        settings.startRecording(.screenshot)
         _ = settings.handle(keyEvent(kVK_F12, [.control, .option, .command]))
-        check(!settings.isRecording && settings.screenshot?.displayString == "⌃⌥⌘F12" && settings.isAvailable,
+        check(!settings.isRecording && settings.screenshot?.displayString == "⌃⌥⌘F12" && !settings.unavailable.contains(.screenshot),
               "⌃⌥⌘F12 is recorded and registered (got \(settings.screenshot?.displayString ?? "none"))")
         check(ShortcutSettings(defaults: defaults, hotKeys: nil).screenshot == settings.screenshot, "the shortcut is saved")
 
-        var pressed = false
-        HotKeyCenter.shared.onPress = { pressed = true }
-        var event: EventRef?
-        CreateEvent(nil, OSType(kEventClassKeyboard), UInt32(kEventHotKeyPressed), 0, EventAttributes(kEventAttributeNone), &event)
-        if let event {
+        var pressed: [ShortcutAction] = []
+        HotKeyCenter.shared.onPress = { pressed.append($0) }
+        for action in ShortcutAction.allCases {
+            var event: EventRef?
+            CreateEvent(nil, OSType(kEventClassKeyboard), UInt32(kEventHotKeyPressed), 0, EventAttributes(kEventAttributeNone), &event)
+            guard let event else { continue }
+            var id = EventHotKeyID(signature: 0x41424C47, id: action.hotKeyID)
+            SetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                              MemoryLayout<EventHotKeyID>.size, &id)
             SendEventToEventTarget(event, GetApplicationEventTarget())
             ReleaseEvent(event)
         }
         pump(0.2)
-        check(pressed, "a hotkey press reaches the app")
+        check(pressed == [.screenshot, .clipboard], "each hotkey reaches its own action (got \(pressed))")
         HotKeyCenter.shared.onPress = nil
 
-        settings.clear()
+        settings.clear(.screenshot)
         check(ShortcutSettings(defaults: defaults, hotKeys: nil).screenshot == nil, "a removed shortcut stays removed")
-        HotKeyCenter.shared.unregister()
+        HotKeyCenter.shared.unregisterAll()
         defaults.removePersistentDomain(forName: suite)
+    }
+
+    private static func quickPasteTests() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ablage-selftest-paste-\(UUID().uuidString)")
+        let store = ClipboardStore(directory: dir)
+        DesignSnapshot.seed(store)
+        let model = QuickPasteModel(store: store)
+        model.reset()
+        let items = model.items
+        check(items.first?.pinned == true && model.highlightedID == items.first?.id, "pinned items come first and the first is selected")
+
+        var picked: ClipItem?
+        model.onPick = { picked = $0 }
+        _ = model.handleKey(keyEvent(kVK_DownArrow, []))
+        _ = model.handleKey(keyEvent(kVK_Return, []))
+        check(picked?.id == items[1].id, "↓ then ↩ picks the second item")
+        _ = model.handleKey(keyEvent(kVK_ANSI_3, [.command]))
+        check(picked?.id == items[2].id, "⌘3 picks the third item")
+        model.query = "git"
+        check(model.items.count == 1 && model.highlightedID == model.items.first?.id, "typing filters the list")
+
+        let ax = CGRect(x: 100, y: 200, width: 2, height: 18)
+        check(CaretLocator.toCocoa(ax, primaryHeight: 1000) == CGRect(x: 100, y: 782, width: 2, height: 18),
+              "caret position converts to screen coordinates")
+        let visible = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let below = QuickPasteController.frame(near: CGRect(x: 400, y: 600, width: 2, height: 18), size: QuickPasteController.size, in: visible)
+        check(below.maxY <= 600, "the list opens below the caret when there is room")
+        let above = QuickPasteController.frame(near: CGRect(x: 400, y: 120, width: 2, height: 18), size: QuickPasteController.size, in: visible)
+        check(above.minY >= 138, "the list opens above the caret near the bottom of the screen")
+        try? FileManager.default.removeItem(at: dir)
     }
 
     private static func keyEvent(_ code: Int, _ flags: NSEvent.ModifierFlags) -> NSEvent {

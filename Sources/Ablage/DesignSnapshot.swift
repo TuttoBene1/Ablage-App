@@ -32,6 +32,15 @@ enum DesignSnapshot {
             write(panel(model: model, store: store, appearance: appearance, height: PanelMetrics.shortcutHeight),
                   to: folder.appendingPathComponent("shortcut-\(name).png"))
 
+            let quick = QuickPasteModel(store: store)
+            quick.reset()
+            quick.canPaste = name == "light"
+            quick.highlightedID = quick.items.dropFirst().first?.id
+            write(render(QuickPasteView(model: quick, store: store), appearance: appearance,
+                         background: backdrop(appearance), radius: QuickPasteController.cornerRadius,
+                         size: QuickPasteController.size),
+                  to: folder.appendingPathComponent("quickpaste-\(name).png"))
+
             let toast = ToastView(image: sampleImage(width: 320, height: 200), symbol: nil,
                                   title: "Screenshot copied", subtitle: "Press ⌘V to paste",
                                   tappable: false, onTap: {})

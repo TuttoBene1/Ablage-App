@@ -8,6 +8,7 @@ final class StatusBarController: NSObject, NSWindowDelegate {
     let panel = FloatingPanel()
     let model: PanelModel
     private let capture: CaptureController
+    private let quickPaste: QuickPasteController
     private var outsideClickMonitor: Any?
     private var recordingTimer: Timer?
     private var contentSize = CGSize(width: PanelMetrics.width, height: 162)
@@ -16,6 +17,7 @@ final class StatusBarController: NSObject, NSWindowDelegate {
 
     init(clipboard: ClipboardStore, capture: CaptureController, shortcuts: ShortcutSettings) {
         self.capture = capture
+        self.quickPaste = QuickPasteController(store: clipboard)
         self.model = PanelModel(store: clipboard, shortcuts: shortcuts)
         super.init()
         configureStatusItem()
@@ -25,14 +27,21 @@ final class StatusBarController: NSObject, NSWindowDelegate {
         model.onClose = { [weak self] in self?.closePanel() }
         model.onQuit = { NSApp.terminate(nil) }
         capture.onRecordingChange = { [weak self] recording in self?.updateRecordingState(recording) }
-        HotKeyCenter.shared.onPress = { [weak self] in self?.handleHotKey() }
+        HotKeyCenter.shared.onPress = { [weak self] action in self?.handleHotKey(action) }
     }
 
-    private func handleHotKey() {
-        if capture.isRecording {
-            capture.stopRecording()
-        } else {
-            startScreenshot()
+    private func handleHotKey(_ action: ShortcutAction) {
+        switch action {
+        case .screenshot:
+            quickPaste.close()
+            if capture.isRecording {
+                capture.stopRecording()
+            } else {
+                startScreenshot()
+            }
+        case .clipboard:
+            closePanel(animated: false)
+            quickPaste.toggle()
         }
     }
 
@@ -95,7 +104,7 @@ final class StatusBarController: NSObject, NSWindowDelegate {
         login.target = self
         login.state = model.launchAtLogin ? .on : .off
         menu.addItem(login)
-        let shortcut = NSMenuItem(title: "Keyboard Shortcut…", action: #selector(menuShortcut), keyEquivalent: "")
+        let shortcut = NSMenuItem(title: "Keyboard Shortcuts…", action: #selector(menuShortcut), keyEquivalent: "")
         shortcut.target = self
         menu.addItem(shortcut)
         menu.addItem(.separator())

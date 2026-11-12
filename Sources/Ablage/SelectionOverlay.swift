@@ -6,7 +6,7 @@ final class SelectionWindow: NSPanel {
     private let selectionView: SelectionView
 
     @MainActor
-    init(screen: NSScreen, controller: CaptureController, showsToolbar: Bool) {
+    init(screen: NSScreen, controller: CaptureController, showsToolbar: Bool, frozenImage: CGImage? = nil) {
         targetScreen = screen
         selectionView = SelectionView(frame: NSRect(origin: .zero, size: screen.frame.size))
         super.init(contentRect: screen.frame,
@@ -27,6 +27,7 @@ final class SelectionWindow: NSPanel {
         selectionView.controller = controller
         selectionView.targetScreen = screen
         contentView = selectionView
+        if let frozenImage { selectionView.showFrozen(frozenImage) }
         if showsToolbar { selectionView.installToolbar(controller: controller) }
     }
 
@@ -72,6 +73,12 @@ final class SelectionView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    func showFrozen(_ image: CGImage) {
+        let frozen = FrozenScreenView(frame: bounds, image: image)
+        frozen.autoresizingMask = [.width, .height]
+        addSubview(frozen, positioned: .below, relativeTo: shapes)
+    }
 
     override func layout() {
         super.layout()
@@ -253,6 +260,21 @@ final class SelectionShapeView: NSView {
         dimLayer.path = path
         CATransaction.commit()
     }
+}
+
+final class FrozenScreenView: NSView {
+    init(frame: NSRect, image: CGImage) {
+        super.init(frame: frame)
+        wantsLayer = true
+        let layer = CALayer()
+        layer.contents = image
+        layer.contentsGravity = .resize
+        self.layer = layer
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 final class SizeBadge: NSView {

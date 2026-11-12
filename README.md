@@ -43,6 +43,7 @@ everything stays on your Mac.
 **Screenshots & screen recordings**
 - Press **⇧⌘2** anywhere (or click the menu bar icon): the screen dims, the cursor becomes a crosshair –
   drag a region and you're done. The shortcut can be changed or turned off in the panel.
+- The screen freezes the moment you press the shortcut, so hover menus and tooltips stay in the shot.
 - The screenshot is copied instantly (⌘V), at full Retina resolution.
 - Switch to **Video** first to record the region as a screen recording (.mov, 60 fps).
   Stop it from the menu bar; the video is saved to Movies and copied to the clipboard.
@@ -57,6 +58,7 @@ everything stays on your Mac.
 - Your last 25 copied texts, images and files – with source app and time.
 - **Pin** items to keep them for good; pinned items are never pushed out.
 - Click an item to copy it again. Includes search and full keyboard control.
+- Press **⌥⌘V** in any text field: your history opens right at the text cursor – pick an item and it is pasted in place.
 - Content that password managers mark as concealed is never stored.
 
 <p align="center">
@@ -94,6 +96,12 @@ screenshot; you can also enable “Ablage” under *System Settings › Privacy 
 macOS additionally asks again from time to time for every app that captures the screen directly.
 Choose **Allow** there – “Open System Settings” does not count as approval.
 
+### Accessibility permission (optional)
+
+To open the history at the text cursor and paste the chosen item directly (⌥⌘V), Ablage needs
+**Accessibility** access: *System Settings › Privacy & Security › Accessibility*. Without it, the list opens at
+the mouse pointer and the item is copied so you can paste it with ⌘V.
+
 ### Requirements
 
 - macOS 15 Sequoia or later (including macOS 26 and 27)
@@ -103,9 +111,10 @@ Choose **Allow** there – “Open System Settings” does not count as approval
 
 | Action | How |
 | --- | --- |
-| Take a screenshot | `⇧⌘2` (change it under ⋯ › Keyboard Shortcut…) |
+| Take a screenshot | `⇧⌘2` (change it under ⋯ › Keyboard Shortcuts…) |
+| Paste from history at the text cursor | `⌥⌘V`, then type to filter, `↑` `↓` `↩` or `⌘1`–`⌘9` |
 | Open the panel | Click the menu bar icon |
-| Quick menu (Shortcut, Open at Login, About, Quit) | Right-click the menu bar icon |
+| Quick menu (Shortcuts, Open at Login, About, Quit) | Right-click the menu bar icon |
 | Select a region | Drag with the crosshair |
 | Switch photo / video | Capture bar or `P` / `V` |
 | Cancel the selection | `esc` or right-click |

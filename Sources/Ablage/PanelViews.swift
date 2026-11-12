@@ -4,7 +4,7 @@ import SwiftUI
 enum PanelMetrics {
     static let width: CGFloat = 330
     static let clipboardHeight: CGFloat = 468
-    static let shortcutHeight: CGFloat = 252
+    static let shortcutHeight: CGFloat = 318
 }
 
 struct PanelRootView: View {
@@ -105,7 +105,7 @@ struct HomeView: View {
                         get: { model.launchAtLogin },
                         set: { model.launchAtLogin = $0 }
                     ))
-                    Button("Keyboard Shortcut…") { model.showShortcut() }
+                    Button("Keyboard Shortcuts…") { model.showShortcut() }
                     Divider()
                     Button("About Ablage") {
                         model.onClose?()
@@ -416,36 +416,8 @@ struct ClipRow: View {
         }
     }
 
-    @ViewBuilder
     private var leading: some View {
-        switch item.kind {
-        case .image:
-            if let thumb = store.thumbnail(for: item) {
-                Image(nsImage: thumb)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 30, height: 30)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
-                    )
-            } else {
-                SymbolBadge(symbol: "photo")
-            }
-        case .files:
-            Image(nsImage: store.fileIcon(for: item))
-                .resizable()
-                .frame(width: 28, height: 28)
-        case .text:
-            if let icon = store.appIcon(for: item.sourceBundleID) {
-                Image(nsImage: icon)
-                    .resizable()
-                    .frame(width: 26, height: 26)
-            } else {
-                SymbolBadge(symbol: "text.alignleft")
-            }
-        }
+        ClipIcon(item: item, store: store, size: 30)
     }
 
     @ViewBuilder
@@ -468,17 +440,58 @@ struct ClipRow: View {
         }
     }
 
-    private var subtitle: String {
+    private var subtitle: String { item.detail }
+}
+
+struct ClipIcon: View {
+    let item: ClipItem
+    let store: ClipboardStore
+    let size: CGFloat
+
+    var body: some View {
+        switch item.kind {
+        case .image:
+            if let thumb = store.thumbnail(for: item) {
+                Image(nsImage: thumb)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: size, height: size)
+                    .clipShape(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                    )
+            } else {
+                SymbolBadge(symbol: "photo").frame(width: size, height: size)
+            }
+        case .files:
+            Image(nsImage: store.fileIcon(for: item))
+                .resizable()
+                .frame(width: size * 0.93, height: size * 0.93)
+        case .text:
+            if let icon = store.appIcon(for: item.sourceBundleID) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .frame(width: size * 0.87, height: size * 0.87)
+            } else {
+                SymbolBadge(symbol: "text.alignleft").frame(width: size, height: size)
+            }
+        }
+    }
+}
+
+extension ClipItem {
+    var detail: String {
         var parts: [String] = []
-        if item.kind == .image, let w = item.pixelWidth, let h = item.pixelHeight {
+        if kind == .image, let w = pixelWidth, let h = pixelHeight {
             parts.append("\(w) × \(h)")
         }
-        if let source = item.sourceName,
+        if let source = sourceName,
            source != PasteboardOrigin.screenshotName,
            source != PasteboardOrigin.recordingName {
             parts.append(source)
         }
-        parts.append(RelativeTime.string(for: item.date))
+        parts.append(RelativeTime.string(for: date))
         return parts.joined(separator: " · ")
     }
 }

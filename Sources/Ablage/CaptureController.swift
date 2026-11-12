@@ -17,18 +17,25 @@ final class CaptureController: ObservableObject {
     private let recorder = ScreenRecorder()
     private var frameWindow: NSWindow?
     private var isBusy = false
+    private var frozenScreens: [CGDirectDisplayID: CGImage] = [:]
 
     func beginSelection() {
         guard overlays.isEmpty, !recorder.isRecording, !isBusy else { return }
         isBusy = true
         Task { @MainActor in
             // Ask ScreenCaptureKit directly: CGPreflightScreenCaptureAccess() stays stale until the app restarts.
+            let content: SCShareableContent
             do {
-                _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
             } catch {
                 isBusy = false
                 ScreenPermission.handle(error)
                 return
+            }
+            // Freeze the screens before the overlay covers them, so hover states and tooltips stay in the shot.
+            frozenScreens = [:]
+            for screen in NSScreen.screens {
+                frozenScreens[screen.displayID] = try? await ScreenGrabber.captureDisplay(screen, content: content)
             }
             isBusy = false
             showOverlays()
@@ -40,7 +47,8 @@ final class CaptureController: ObservableObject {
         BackgroundCursor.enable()
         let mouseScreen = NSScreen.containingMouse()
         overlays = NSScreen.screens.map { screen in
-            SelectionWindow(screen: screen, controller: self, showsToolbar: screen == mouseScreen)
+            SelectionWindow(screen: screen, controller: self, showsToolbar: screen == mouseScreen,
+                            frozenImage: frozenScreens[screen.displayID])
         }
         overlays.forEach { $0.present() }
         let keyOverlay = overlays.first { $0.targetScreen == mouseScreen } ?? overlays.first
@@ -50,15 +58,18 @@ final class CaptureController: ObservableObject {
 
     func cancel() {
         dismissOverlays()
+        frozenScreens = [:]
     }
 
     func complete(rect: CGRect, on screen: NSScreen) {
         let mode = self.mode
+        let frozen = frozenScreens[screen.displayID]
+        frozenScreens = [:]
         dismissOverlays()
         isBusy = true
         Task { @MainActor in
             switch mode {
-            case .photo: await takeScreenshot(rect: rect, screen: screen)
+            case .photo: await takeScreenshot(rect: rect, screen: screen, frozen: frozen)
             case .video: await startRecording(rect: rect, screen: screen)
             }
             isBusy = false
@@ -74,9 +85,14 @@ final class CaptureController: ObservableObject {
         DispatchQueue.main.async { withExtendedLifetime(closing) {} }
     }
 
-    private func takeScreenshot(rect: CGRect, screen: NSScreen) async {
+    private func takeScreenshot(rect: CGRect, screen: NSScreen, frozen: CGImage?) async {
         do {
-            let image = try await ScreenGrabber.capture(rect: rect, screen: screen)
+            let image: CGImage
+            if let frozen, let cropped = ScreenGrabber.crop(frozen, to: rect, screenSize: screen.frame.size) {
+                image = cropped
+            } else {
+                image = try await ScreenGrabber.capture(rect: rect, screen: screen)
+            }
             let rep = NSBitmapImageRep(cgImage: image)
             rep.size = rect.size
             guard let png = rep.representation(using: .png, properties: [:]) else { return }
@@ -218,6 +234,10 @@ enum CaptureError: LocalizedError {
 enum ScreenGrabber {
     static func filter(for screen: NSScreen) async throws -> SCContentFilter {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        return try filter(for: screen, in: content)
+    }
+
+    static func filter(for screen: NSScreen, in content: SCShareableContent) throws -> SCContentFilter {
         let displayID = screen.displayID
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
             throw CaptureError.displayNotFound
@@ -237,6 +257,26 @@ enum ScreenGrabber {
         config.showsCursor = false
         config.captureResolution = .best
         return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+    }
+
+    static func captureDisplay(_ screen: NSScreen, content: SCShareableContent) async throws -> CGImage {
+        let filter = try filter(for: screen, in: content)
+        let scale = screen.backingScaleFactor
+        let config = SCStreamConfiguration()
+        config.width = max(1, Int((screen.frame.width * scale).rounded()))
+        config.height = max(1, Int((screen.frame.height * scale).rounded()))
+        config.showsCursor = false
+        config.captureResolution = .best
+        return try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+    }
+
+    /// `rect` is in points with a top-left origin, like the selection.
+    static func crop(_ image: CGImage, to rect: CGRect, screenSize: CGSize) -> CGImage? {
+        guard screenSize.width > 0 else { return nil }
+        let scale = CGFloat(image.width) / screenSize.width
+        let pixels = CGRect(x: rect.minX * scale, y: rect.minY * scale,
+                            width: rect.width * scale, height: rect.height * scale).integral
+        return image.cropping(to: pixels)
     }
 }
 

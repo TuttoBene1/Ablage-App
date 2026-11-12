@@ -100,17 +100,61 @@ enum KeyNames {
     }
 }
 
+enum ShortcutAction: String, CaseIterable, Identifiable {
+    case screenshot, clipboard
+
+    var id: String { rawValue }
+
+    var hotKeyID: UInt32 { self == .screenshot ? 1 : 2 }
+
+    init?(hotKeyID: UInt32) {
+        guard let action = Self.allCases.first(where: { $0.hotKeyID == hotKeyID }) else { return nil }
+        self = action
+    }
+
+    var title: String {
+        switch self {
+        case .screenshot: return "Take Screenshot"
+        case .clipboard: return "Paste from History"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .screenshot: return "Starts the area selection in any app."
+        case .clipboard: return "Opens your history at the text cursor."
+        }
+    }
+
+    var defaultShortcut: Shortcut {
+        switch self {
+        case .screenshot: return .screenshotDefault
+        case .clipboard: return .clipboardDefault
+        }
+    }
+
+    var storageKey: String { "\(rawValue)Shortcut" }
+}
+
+extension Shortcut {
+    static let clipboardDefault = Shortcut(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(cmdKey | optionKey))
+}
+
+struct ShortcutMessage {
+    let action: ShortcutAction
+    let text: String
+}
+
 @MainActor
 final class ShortcutSettings: ObservableObject {
-    @Published private(set) var screenshot: Shortcut?
-    @Published private(set) var isRecording = false
+    @Published private(set) var shortcuts: [ShortcutAction: Shortcut] = [:]
+    @Published private(set) var recording: ShortcutAction?
     @Published private(set) var liveModifiers: UInt32 = 0
-    @Published private(set) var message: String?
-    @Published private(set) var isAvailable = true
+    @Published private(set) var message: ShortcutMessage?
+    @Published private(set) var unavailable: Set<ShortcutAction> = []
 
     private let defaults: UserDefaults
     private let hotKeys: HotKeyCenter?
-    private static let storageKey = "screenshotShortcut"
     private static let noneValue = "none"
 
     convenience init() {
@@ -120,48 +164,55 @@ final class ShortcutSettings: ObservableObject {
     init(defaults: UserDefaults, hotKeys: HotKeyCenter?) {
         self.defaults = defaults
         self.hotKeys = hotKeys
-        if defaults.string(forKey: Self.storageKey) == Self.noneValue {
-            screenshot = nil
-        } else if let data = defaults.data(forKey: Self.storageKey),
-                  let stored = try? JSONDecoder().decode(Shortcut.self, from: data) {
-            screenshot = stored
-        } else {
-            screenshot = .screenshotDefault
+        for action in ShortcutAction.allCases {
+            if defaults.string(forKey: action.storageKey) == Self.noneValue { continue }
+            if let data = defaults.data(forKey: action.storageKey),
+               let stored = try? JSONDecoder().decode(Shortcut.self, from: data) {
+                shortcuts[action] = stored
+            } else {
+                shortcuts[action] = action.defaultShortcut
+            }
         }
     }
 
-    var isDefault: Bool { screenshot == .screenshotDefault }
+    var screenshot: Shortcut? { shortcuts[.screenshot] }
+    var isRecording: Bool { recording != nil }
+    var hasChanges: Bool { ShortcutAction.allCases.contains { shortcuts[$0] != $0.defaultShortcut } }
+
+    func shortcut(for action: ShortcutAction) -> Shortcut? { shortcuts[action] }
 
     func activate() {
-        isAvailable = register(screenshot)
+        ShortcutAction.allCases.forEach(activate)
     }
 
-    func startRecording() {
+    func startRecording(_ action: ShortcutAction) {
+        if let current = recording, current != action { activate(current) }
         message = nil
         liveModifiers = 0
-        isRecording = true
-        hotKeys?.unregister()
+        recording = action
+        hotKeys?.unregister(action)
     }
 
     func cancelRecording() {
-        guard isRecording else { return }
-        isRecording = false
+        guard let action = recording else { return }
+        recording = nil
         liveModifiers = 0
-        activate()
+        activate(action)
     }
 
-    func clear() {
-        isRecording = false
-        save(nil)
+    func clear(_ action: ShortcutAction) {
+        if recording == action { recording = nil }
+        save(nil, for: action)
     }
 
-    func resetToDefault() {
-        isRecording = false
-        apply(.screenshotDefault)
+    func resetToDefaults() {
+        recording = nil
+        message = nil
+        for action in ShortcutAction.allCases { save(action.defaultShortcut, for: action) }
     }
 
     func handle(_ event: NSEvent) -> Bool {
-        guard isRecording else { return false }
+        guard let action = recording else { return false }
         if event.type == .flagsChanged {
             liveModifiers = Shortcut.carbonModifiers(from: event.modifierFlags)
             return true
@@ -172,48 +223,52 @@ final class ShortcutSettings: ObservableObject {
         case (UInt32(kVK_Escape), 0):
             cancelRecording()
         case (UInt32(kVK_Delete), 0), (UInt32(kVK_ForwardDelete), 0):
-            clear()
+            clear(action)
         default:
             if shortcut.isUsableGlobally {
-                apply(shortcut)
+                apply(shortcut, for: action)
             } else {
-                message = "Use two modifier keys including ⌘ or ⌃ (like ⇧⌘2) – or a function key such as F13."
+                message = ShortcutMessage(action: action, text: "Use two modifier keys including ⌘ or ⌃ (like ⇧⌘2) – or a function key such as F13.")
             }
         }
         return true
     }
 
-    private func apply(_ shortcut: Shortcut) {
-        isRecording = false
+    private func apply(_ shortcut: Shortcut, for action: ShortcutAction) {
+        recording = nil
         liveModifiers = 0
+        if let other = ShortcutAction.allCases.first(where: { $0 != action && shortcuts[$0] == shortcut }) {
+            message = ShortcutMessage(action: action, text: "\(shortcut.displayString) is already used for “\(other.title)”.")
+            activate(action)
+            return
+        }
         if shortcut.isUsedByMacOS {
-            message = "\(shortcut.displayString) is used by macOS. Turn it off in System Settings › Keyboard › Keyboard Shortcuts first."
-            activate()
+            message = ShortcutMessage(action: action, text: "\(shortcut.displayString) is used by macOS. Turn it off in System Settings › Keyboard › Keyboard Shortcuts first.")
+            activate(action)
             return
         }
-        guard register(shortcut) else {
-            message = "\(shortcut.displayString) is already used by another app."
-            activate()
-            return
-        }
-        save(shortcut)
+        save(shortcut, for: action)
     }
 
-    private func save(_ shortcut: Shortcut?) {
-        screenshot = shortcut
+    private func save(_ shortcut: Shortcut?, for action: ShortcutAction) {
+        shortcuts[action] = shortcut
         if let shortcut, let data = try? JSONEncoder().encode(shortcut) {
-            defaults.set(data, forKey: Self.storageKey)
+            defaults.set(data, forKey: action.storageKey)
         } else {
-            defaults.set(Self.noneValue, forKey: Self.storageKey)
+            defaults.set(Self.noneValue, forKey: action.storageKey)
         }
-        message = nil
-        activate()
+        if message?.action == action { message = nil }
+        activate(action)
     }
 
-    private func register(_ shortcut: Shortcut?) -> Bool {
-        guard let hotKeys else { return true }
-        let status = hotKeys.register(shortcut)
-        if status != noErr { NSLog("Ablage: could not register %@ (%d)", shortcut?.displayString ?? "", status) }
-        return status == noErr
+    private func activate(_ action: ShortcutAction) {
+        guard let hotKeys else { return }
+        let status = hotKeys.register(shortcuts[action], for: action)
+        if status == noErr {
+            unavailable.remove(action)
+        } else {
+            unavailable.insert(action)
+            NSLog("Ablage: could not register %@ (%d)", shortcuts[action]?.displayString ?? "", status)
+        }
     }
 }
