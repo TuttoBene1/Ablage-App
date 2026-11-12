@@ -41,7 +41,8 @@ everything stays on your Mac.
 ## Features
 
 **Screenshots & screen recordings**
-- The screen dims slightly, the cursor becomes a crosshair – drag a region and you're done.
+- Press **⇧⌘2** anywhere (or click the menu bar icon): the screen dims, the cursor becomes a crosshair –
+  drag a region and you're done. The shortcut can be changed or turned off in the panel.
 - The screenshot is copied instantly (⌘V), at full Retina resolution.
 - Switch to **Video** first to record the region as a screen recording (.mov, 60 fps).
   Stop it from the menu bar; the video is saved to Movies and copied to the clipboard.
@@ -102,12 +103,13 @@ Choose **Allow** there – “Open System Settings” does not count as approval
 
 | Action | How |
 | --- | --- |
+| Take a screenshot | `⇧⌘2` (change it under ⋯ › Keyboard Shortcut…) |
 | Open the panel | Click the menu bar icon |
-| Quick menu (About, Open at Login, Quit) | Right-click the menu bar icon |
+| Quick menu (Shortcut, Open at Login, About, Quit) | Right-click the menu bar icon |
 | Select a region | Drag with the crosshair |
 | Switch photo / video | Capture bar or `P` / `V` |
 | Cancel the selection | `esc` or right-click |
-| Stop a recording | Click the stop icon in the menu bar |
+| Stop a recording | Click the stop icon in the menu bar or press the shortcut again |
 | Editor: crop / brush | `C` / `P` |
 | Editor: undo / redo | `⌘Z` / `⇧⌘Z` |
 | Editor: copy / done / close | `⌘C` / `↩` / `esc` |

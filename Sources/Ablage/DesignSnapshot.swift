@@ -17,7 +17,7 @@ enum DesignSnapshot {
         try? fm.removeItem(at: dataDir)
         let store = ClipboardStore(directory: dataDir)
         seed(store)
-        let model = PanelModel(store: store)
+        let model = PanelModel(store: store, shortcuts: ShortcutSettings(defaults: UserDefaults(suiteName: "ablage-snapshot")!, hotKeys: nil))
 
         for (name, appearanceName) in [("light", NSAppearance.Name.aqua), ("dark", NSAppearance.Name.darkAqua)] {
             let appearance = NSAppearance(named: appearanceName)!
@@ -28,6 +28,9 @@ enum DesignSnapshot {
             model.highlightedID = model.visibleItems.dropFirst(2).first?.id
             write(panel(model: model, store: store, appearance: appearance, height: PanelMetrics.clipboardHeight),
                   to: folder.appendingPathComponent("clipboard-\(name).png"))
+            model.showShortcut()
+            write(panel(model: model, store: store, appearance: appearance, height: PanelMetrics.shortcutHeight),
+                  to: folder.appendingPathComponent("shortcut-\(name).png"))
 
             let toast = ToastView(image: sampleImage(width: 320, height: 200), symbol: nil,
                                   title: "Screenshot copied", subtitle: "Press ⌘V to paste",

@@ -14,9 +14,9 @@ final class StatusBarController: NSObject, NSWindowDelegate {
     private var isClosing = false
     private var routeObserver: AnyCancellable?
 
-    init(clipboard: ClipboardStore, capture: CaptureController) {
+    init(clipboard: ClipboardStore, capture: CaptureController, shortcuts: ShortcutSettings) {
         self.capture = capture
-        self.model = PanelModel(store: clipboard)
+        self.model = PanelModel(store: clipboard, shortcuts: shortcuts)
         super.init()
         configureStatusItem()
         configurePanel()
@@ -25,6 +25,15 @@ final class StatusBarController: NSObject, NSWindowDelegate {
         model.onClose = { [weak self] in self?.closePanel() }
         model.onQuit = { NSApp.terminate(nil) }
         capture.onRecordingChange = { [weak self] recording in self?.updateRecordingState(recording) }
+        HotKeyCenter.shared.onPress = { [weak self] in self?.handleHotKey() }
+    }
+
+    private func handleHotKey() {
+        if capture.isRecording {
+            capture.stopRecording()
+        } else {
+            startScreenshot()
+        }
     }
 
     private func configureStatusItem() {
@@ -86,6 +95,9 @@ final class StatusBarController: NSObject, NSWindowDelegate {
         login.target = self
         login.state = model.launchAtLogin ? .on : .off
         menu.addItem(login)
+        let shortcut = NSMenuItem(title: "Keyboard Shortcut…", action: #selector(menuShortcut), keyEquivalent: "")
+        shortcut.target = self
+        menu.addItem(shortcut)
         menu.addItem(.separator())
         let about = NSMenuItem(title: "About Ablage", action: #selector(showAbout), keyEquivalent: "")
         about.target = self
@@ -106,6 +118,11 @@ final class StatusBarController: NSObject, NSWindowDelegate {
     @objc private func menuClipboard() {
         showPanel()
         model.showClipboard()
+    }
+
+    @objc private func menuShortcut() {
+        showPanel()
+        model.showShortcut()
     }
 
     @objc private func toggleLogin() { model.launchAtLogin.toggle() }
@@ -151,6 +168,7 @@ final class StatusBarController: NSObject, NSWindowDelegate {
         switch route {
         case .home: return CGSize(width: PanelMetrics.width, height: homeHeight)
         case .clipboard: return CGSize(width: PanelMetrics.width, height: PanelMetrics.clipboardHeight)
+        case .shortcut: return CGSize(width: PanelMetrics.width, height: PanelMetrics.shortcutHeight)
         }
     }
 

@@ -27,11 +27,16 @@ final class FloatingPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .keyDown {
+        if event.type == .keyDown || event.type == .flagsChanged {
             if let keyHandler, keyHandler(event) { return }
-            if event.keyCode == KeyCode.escape { onCancel?(); return }
+            if event.type == .keyDown, event.keyCode == KeyCode.escape { onCancel?(); return }
         }
         super.sendEvent(event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if let keyHandler, keyHandler(event) { return true }
+        return super.performKeyEquivalent(with: event)
     }
 
     override func cancelOperation(_ sender: Any?) {

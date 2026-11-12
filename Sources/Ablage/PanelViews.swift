@@ -4,6 +4,7 @@ import SwiftUI
 enum PanelMetrics {
     static let width: CGFloat = 330
     static let clipboardHeight: CGFloat = 468
+    static let shortcutHeight: CGFloat = 252
 }
 
 struct PanelRootView: View {
@@ -12,11 +13,15 @@ struct PanelRootView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            if model.route == .home {
+            switch model.route {
+            case .home:
                 HomeView(model: model, store: store)
                     .transition(.opacity)
-            } else {
+            case .clipboard:
                 ClipboardView(model: model, store: store)
+                    .transition(.opacity)
+            case .shortcut:
+                ShortcutView(model: model, settings: model.shortcuts)
                     .transition(.opacity)
             }
         }
@@ -34,6 +39,18 @@ struct PanelRootView: View {
 struct HomeView: View {
     @ObservedObject var model: PanelModel
     @ObservedObject var store: ClipboardStore
+    @ObservedObject private var shortcuts: ShortcutSettings
+
+    init(model: PanelModel, store: ClipboardStore) {
+        self.model = model
+        self.store = store
+        _shortcuts = ObservedObject(wrappedValue: model.shortcuts)
+    }
+
+    private var screenshotSubtitle: String {
+        guard let shortcut = shortcuts.screenshot else { return "Photo or video" }
+        return "\(shortcut.displayString) · Photo or video"
+    }
 
     private var countText: String {
         let count = store.items.count
@@ -46,7 +63,7 @@ struct HomeView: View {
             HStack(spacing: 10) {
                 ActionTile(symbol: "camera.viewfinder",
                            title: "Screenshot",
-                           subtitle: "Photo or video") {
+                           subtitle: screenshotSubtitle) {
                     model.onScreenshot?()
                 }
                 ActionTile(symbol: "list.clipboard",
@@ -88,6 +105,7 @@ struct HomeView: View {
                         get: { model.launchAtLogin },
                         set: { model.launchAtLogin = $0 }
                     ))
+                    Button("Keyboard Shortcut…") { model.showShortcut() }
                     Divider()
                     Button("About Ablage") {
                         model.onClose?()

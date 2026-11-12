@@ -4,7 +4,7 @@ import ServiceManagement
 
 @MainActor
 final class PanelModel: ObservableObject {
-    enum Route { case home, clipboard }
+    enum Route { case home, clipboard, shortcut }
 
     @Published var route: Route = .home
     @Published var query = "" {
@@ -16,13 +16,15 @@ final class PanelModel: ObservableObject {
     @Published var focusSearchTick = 0
 
     let store: ClipboardStore
+    let shortcuts: ShortcutSettings
 
     var onScreenshot: (() -> Void)?
     var onClose: (() -> Void)?
     var onQuit: (() -> Void)?
 
-    init(store: ClipboardStore) {
+    init(store: ClipboardStore, shortcuts: ShortcutSettings) {
         self.store = store
+        self.shortcuts = shortcuts
     }
 
     var pinnedItems: [ClipItem] { store.items.filter { $0.pinned && $0.matches(query) } }
@@ -37,10 +39,16 @@ final class PanelModel: ObservableObject {
     }
 
     func showHome() {
+        shortcuts.cancelRecording()
         route = .home
     }
 
+    func showShortcut() {
+        route = .shortcut
+    }
+
     func reset() {
+        shortcuts.cancelRecording()
         route = .home
         query = ""
         copiedID = nil
@@ -79,7 +87,8 @@ final class PanelModel: ObservableObject {
     }
 
     func handleKey(_ event: NSEvent) -> Bool {
-        guard route == .clipboard else { return false }
+        if route == .shortcut { return shortcuts.handle(event) }
+        guard route == .clipboard, event.type == .keyDown else { return false }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         switch event.keyCode {
         case KeyCode.escape where !query.isEmpty: query = ""; return true

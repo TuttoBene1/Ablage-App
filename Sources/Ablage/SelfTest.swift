@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 
 @MainActor
@@ -6,6 +7,7 @@ enum SelfTest {
     static func runIfRequested() -> Bool {
         guard CommandLine.arguments.contains("--selftest") else { return false }
         editorTests()
+        shortcutTests()
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ablage-selftest-\(UUID().uuidString)")
         let store = ClipboardStore(directory: dir)
         DesignSnapshot.seed(store)
@@ -14,7 +16,8 @@ enum SelfTest {
             item.date = Date().addingTimeInterval(-Double(3000 + i * 60))
             store.addPrepared(item)
         }
-        let controller = StatusBarController(clipboard: store, capture: CaptureController())
+        let shortcuts = ShortcutSettings(defaults: UserDefaults(suiteName: "ablage-selftest-panel")!, hotKeys: nil)
+        let controller = StatusBarController(clipboard: store, capture: CaptureController(), shortcuts: shortcuts)
         pump(0.6)
 
         controller.showPanel()
@@ -125,6 +128,62 @@ enum SelfTest {
         check(doc.strokes.count == 1 && doc.canRedo, "redo brings the stroke back")
         check(doc.renderImage()?.width == 800, "uncropped render keeps full size")
         window.orderOut(nil)
+    }
+
+    private static func shortcutTests() {
+        check(Shortcut.screenshotDefault.displayString == "⇧⌘2",
+              "default shortcut reads ⇧⌘2 (got \(Shortcut.screenshotDefault.displayString))")
+        check(!Shortcut.screenshotDefault.isUsedByMacOS, "⇧⌘2 is not a macOS shortcut")
+        check(!Shortcut(keyCode: UInt32(kVK_ANSI_A), modifiers: UInt32(cmdKey)).isUsableGlobally, "⌘A alone is rejected")
+        check(!Shortcut(keyCode: UInt32(kVK_ANSI_E), modifiers: UInt32(optionKey | shiftKey)).isUsableGlobally,
+              "⌥⇧E is rejected (types characters)")
+        check(Shortcut(keyCode: UInt32(kVK_F13), modifiers: 0).isUsableGlobally, "F13 alone is allowed")
+
+        let suite = "ablage-selftest-shortcuts"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let settings = ShortcutSettings(defaults: defaults, hotKeys: .shared)
+        check(settings.screenshot == .screenshotDefault, "without a saved value the default is used")
+
+        settings.startRecording()
+        _ = settings.handle(keyEvent(kVK_ANSI_A, []))
+        check(settings.isRecording && settings.message != nil, "a plain letter keeps recording and shows a hint")
+
+        let areaShortcut = Shortcut(keyCode: UInt32(kVK_ANSI_4), modifiers: UInt32(cmdKey | shiftKey))
+        if areaShortcut.isUsedByMacOS {
+            _ = settings.handle(keyEvent(kVK_ANSI_4, [.command, .shift]))
+            check(settings.message?.contains("macOS") == true && settings.screenshot == .screenshotDefault,
+                  "⇧⌘4 is refused while macOS uses it")
+            settings.startRecording()
+        }
+
+        _ = settings.handle(keyEvent(kVK_F12, [.control, .option, .command]))
+        check(!settings.isRecording && settings.screenshot?.displayString == "⌃⌥⌘F12" && settings.isAvailable,
+              "⌃⌥⌘F12 is recorded and registered (got \(settings.screenshot?.displayString ?? "none"))")
+        check(ShortcutSettings(defaults: defaults, hotKeys: nil).screenshot == settings.screenshot, "the shortcut is saved")
+
+        var pressed = false
+        HotKeyCenter.shared.onPress = { pressed = true }
+        var event: EventRef?
+        CreateEvent(nil, OSType(kEventClassKeyboard), UInt32(kEventHotKeyPressed), 0, EventAttributes(kEventAttributeNone), &event)
+        if let event {
+            SendEventToEventTarget(event, GetApplicationEventTarget())
+            ReleaseEvent(event)
+        }
+        pump(0.2)
+        check(pressed, "a hotkey press reaches the app")
+        HotKeyCenter.shared.onPress = nil
+
+        settings.clear()
+        check(ShortcutSettings(defaults: defaults, hotKeys: nil).screenshot == nil, "a removed shortcut stays removed")
+        HotKeyCenter.shared.unregister()
+        defaults.removePersistentDomain(forName: suite)
+    }
+
+    private static func keyEvent(_ code: Int, _ flags: NSEvent.ModifierFlags) -> NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
+                         context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false,
+                         keyCode: UInt16(code))!
     }
 
     private static func pump(_ seconds: TimeInterval) {
